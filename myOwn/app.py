@@ -117,6 +117,35 @@ inventario.listar_libros()
 print("Muestro un Libro que no existe y uno que existe:")
 inventario.mostrar_libro(10)
 inventario.mostrar_libro(2)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 """ 
 inventario.modificar_libro(3, 'platero y yo', 12, 2345, 'platero.jpg', 'burro', 1971)
 print("Imprimo el producto 3 después de modificarlo:")
