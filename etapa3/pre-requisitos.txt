@@ -1,0 +1,18 @@
+abrir terminal e instalar:
+
+pip install mysql-connector-python
+- El paquete mysql-connector-python facilita la conexión y la interacción con bases de datos MySQL desde Python
+este paquete sirve para conectar tu aplicación Python a una base de datos MySQL y 
+realizar operaciones de base de datos, como consultas SQL, inserciones, actualizaciones y eliminaciones de registros
+
+Alternativa: usar extensión pip manager
+
+ pip install Flask
+ pip install flask-cors
+ pip install Werkzeug
+ pip install jinja2 
+ pip install mysql-connector-python
+
+
+ pip list
+ - para ver qué tengo instalado
