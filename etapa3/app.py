@@ -1,97 +1,115 @@
-import mysql.connector
-from decimal import Decimal
+import mysql.connector   
+
+# abrir XAMPP
+# en  phpMyAdmin crear la BD miapp
 
 class Catalogo:
+#el constructor init Inicializa una instancia de Catalogo y crea una conexión a la base de datos
+#usa el metodo connect al que le paso los datos del host, user, password y base de datos y se conecta con la BD
     def __init__(self, host, user, password, database):
-        self.conn = mysql.connector.connect(
+                        
+        self.conn = mysql.connector.connect(  # pág 19 - "conector" es conjunto de herramientas o una biblioteca que facilita la interacción entre Python y la BD
             host=host,
-            user=user,4
+            user=user,
             password=password,
             database=database
         )
-        self.cursor = self.conn.cursor(dictionary=True)
 
-    def limpiar_tabla_animales(self):
-        self.cursor.execute("DELETE FROM animales")
-        self.conn.commit()
+        # El cursor actúa como un intermediario entre tu programa Python y la base de datos MySQL. 
+        # # Permite ejecutar comandos SQL (como SELECT, INSERT, UPDATE, DELETE) desde Python
+        #el cursor por defecto trabaja con tuplas, pero nosotros vamos a trabajar con diccionarios
+        self.cursor = self.conn.cursor(dictionary=True)  #el cursor se configura para que devuelva valores como diccionarios, el cursor va a ejecutar las sentencias sql
+        
+        # creamos la tabla automáticamente desde python, si no existiere
+        # el codigo es auto incremental entonces evitamos el ingreso de duplicados
+        self.cursor.execute('''CREATE TABLE IF NOT EXISTS productos (  
+            codigo INT AUTO_INCREMENT PRIMARY KEY,
+            descripcion VARCHAR(255) NOT NULL,
+            cantidad INT NOT NULL,
+            precio DECIMAL(10, 2) NOT NULL,
+            imagen_url VARCHAR(255),
+            proveedor INT(4))''')
+        
+        #con el commit confirmamos la operación 
+        #el conn es una instancia del objeto my sql connector propia de esa libreria , este objeto maneja la conexión con la base de datos my sql
+        self.conn.commit()  
+    
+    #ya no pasamos el codigo porque será auto-incremental:
+    #el diccionario que teníamos en el ejemplo anterior es reemplazado por el insert    
+    def agregar_producto(self, descripcion, cantidad, precio, imagen, proveedor):
+       #en la variable sql se construye una consulta SQL que inserta una nueva fila en la tabla productos
+        sql = "INSERT INTO productos (descripcion, cantidad, precio, imagen_url, proveedor) VALUES (%s, %s, %s, %s, %s)" #Los %s se reemplazan por los valores que pasamos al llamar el metodo
+        valores = (descripcion, cantidad, precio, imagen, proveedor)
+        self.cursor.execute(sql,valores)  #La base de datos guarda el nuevo producto en la tabla productos
+        self.conn.commit()  #Se confirma la transacción
+        return self.cursor.lastrowid   #retornamos el id del ultimo registro insertado en la tabla productos, o sea, el codigo del producto
 
-    def agregar_animal(self, nombre, especie, edad, peso, imagen, dueño):
-        sql = "INSERT INTO animales (nombre, especie, edad, peso, imagen, dueño) VALUES (%s, %s, %s, %s, %s, %s)"
-        valores = (nombre, especie, edad, peso, imagen, dueño)
-        self.cursor.execute(sql, valores)
-        self.conn.commit()
-        return self.cursor.lastrowid
+    def consultar_producto(self, codigo):
+        # Consultamos un producto a partir de su código
+        self.cursor.execute(f"SELECT * FROM productos WHERE codigo = {codigo}")
+        return self.cursor.fetchone()    #el cursor obtiene una sola fila del resultado de la consulta,retorna un diccionario con la información del producto consultado
 
-    def consultar_animal(self, codigo):
-        self.cursor.execute("SELECT * FROM animales WHERE codigo = %s", (codigo,))
-        return self.cursor.fetchone()
+    def modificar_producto(self, codigo, nueva_descripcion, nueva_cantidad, nuevo_precio, nueva_imagen, nuevo_proveedor):
+        sql = "UPDATE productos SET descripcion = %s, cantidad = %s, precio = %s, imagen_url = %s, proveedor = %s WHERE codigo = %s"   #pongo where sino pisa todos los productos
+        valores = (nueva_descripcion, nueva_cantidad, nuevo_precio, nueva_imagen, nuevo_proveedor, codigo)  #valores es una tupla
 
-    def modificar_animal(self, codigo, nuevo_nombre, nueva_especie, nueva_edad, nuevo_peso, nueva_imagen, nuevo_dueño):
-        sql = "UPDATE animales SET nombre = %s, especie = %s, edad = %s, peso = %s, imagen = %s, dueño = %s WHERE codigo = %s"
-        valores = (nuevo_nombre, nueva_especie, nueva_edad, nuevo_peso, nueva_imagen, nuevo_dueño, codigo)
-        self.cursor.execute(sql, valores)
-        self.conn.commit()
-        return self.cursor.rowcount > 0
-
-    def mostrar_animal(self, codigo):
-        animal = self.consultar_animal(codigo)
-        if animal:
+        self.cursor.execute(sql, valores)  # ejecuto la consulta a la base de datos (execute es metodo del cursor)
+        self.conn.commit()                 # confirmo la operación
+        return self.cursor.rowcount > 0    # devuelve cuántas filas fueron afectadas por la modificación
+    
+    def mostrar_producto(self, codigo):
+        # Mostramos los datos de un producto a partir de su código
+        producto = self.consultar_producto(codigo)  #trae el producto en forma de diccionario
+        if producto:
             print("-" * 40)
-            print(f"Código.....: {animal['codigo']}")
-            print(f"Nombre.....: {animal['nombre']}")
-            print(f"Especie....: {animal['especie']}")
-            print(f"Edad.......: {animal['edad']}")
-            print(f"Peso.......: {animal['peso']} kg")
-            print(f"Imagen.....: {animal['imagen']}")
-            print(f"Dueño......: {animal['dueño']}")
+            print(f"Código.....: {producto['codigo']}")
+            print(f"Descripción: {producto['descripcion']}")
+            print(f"Cantidad...: {producto['cantidad']}")
+            print(f"Precio.....: {producto['precio']}")
+            print(f"Imagen.....: {producto['imagen_url']}")
+            print(f"Proveedor..: {producto['proveedor']}")
             print("-" * 40)
         else:
-            print(f"Animal {codigo} no encontrado.")
+            print("Producto no encontrado.")
 
-    def listar_animales(self):
-        self.cursor.execute("SELECT * FROM animales")
-        animales = self.cursor.fetchall()
-        return animales
+    def listar_productos(self):
+        self.cursor.execute("SELECT * FROM productos")
+        productos = self.cursor.fetchall()   #fetch all es un metodo que trae todas las filas de la tabla, lista de diccionarios
+        return productos
 
-    def eliminar_animal(self, codigo):
-        self.cursor.execute("DELETE FROM animales WHERE codigo = %s", (codigo,))
-        self.conn.commit()
-        return self.cursor.rowcount > 0
+    def eliminar_producto(self, codigo):
+        # Eliminamos un producto de la tabla a partir de su código
+        self.cursor.execute(f"DELETE FROM productos WHERE codigo = {codigo}")
+        self.conn.commit()               # confirmo
+        return self.cursor.rowcount > 0  # devuelve cuántas filas fueron afectadas por la modificación
 
-if __name__ == "__main__":
-    # Programa principal (inicializo el catálogo)
-    catalogo = Catalogo(host='localhost', user='root', password='', database='veterinaria')
+# Programa principal (inicializo el catálogo)
+catalogo = Catalogo(host='localhost', user='root', password='', database='miapp')
 
-    # Limpiamos la tabla de animales para iniciar desde cero
-    catalogo.limpiar_tabla_animales()
+# Agregamos productos a la tabla
+catalogo.agregar_producto('Teclado USB 101 teclas', 10, 4500, 'teclado.jpg', 101)
+catalogo.agregar_producto('Mouse USB 3 botones', 5, 2500, 'mouse.jpg', 102)
+catalogo.agregar_producto('Monitor LED', 5, 25000, 'monitor.jpg', 102)
 
-    # Agregamos animales a la tabla y guardamos los códigos de los animales
-    cod_animal1 = catalogo.agregar_animal('Luna', 'Perro', 3, Decimal('15.5'), 'luna.jpg', 'Carlos')
-    cod_animal2 = catalogo.agregar_animal('Mia', 'Gato', 2, Decimal('4.2'), 'mia.jpg', 'Ana')
-    cod_animal3 = catalogo.agregar_animal('Max', 'Perro', 5, Decimal('20.0'), 'max.jpg', 'Luis')
+# Consultamos un producto y lo mostramos
+cod_prod = int(input("Ingrese el código del producto: "))
+producto = catalogo.consultar_producto(cod_prod)
+if producto:
+    print(f"Producto encontrado: {producto['codigo']} - {producto['descripcion']}")
+else:
+    print(f'Producto {cod_prod} no encontrado.')
 
-    # Consultamos un animal y lo mostramos
-    cod_animal = int(input("Ingrese el código del animal: "))
-    animal = catalogo.consultar_animal(cod_animal)
-    if animal:
-        print(f"Animal encontrado: {animal['codigo']} - {animal['nombre']}")
-        catalogo.mostrar_animal(cod_animal)
-    else:
-        print(f'Animal {cod_animal} no encontrado.')
+# Modificar un producto
+catalogo.mostrar_producto(10)
+catalogo.modificar_producto(10, 'Teclado mecánico', 20, 35000, 'teclado2.jpg', 102)
+catalogo.mostrar_producto(10)
 
-    # Modificar un animal
-    catalogo.modificar_animal(cod_animal1, 'Luna', 'Perro', 4, Decimal('16.0'), 'luna.jpg', 'Carlos')
-    catalogo.mostrar_animal(cod_animal1)
+# Listar productos
+productos = catalogo.listar_productos()
+for producto in productos:  # recorro la lista de productos
+    print(producto)         # imprimo el diccionario
 
-    # Listar animales después de realizar las operaciones
-    print("Listado de animales:")
-    animales = catalogo.listar_animales()
-    for animal in animales:
-        print(animal)
-
-    # Eliminar un animal
-    catalogo.eliminar_animal(cod_animal2)
-    print("Animales después de eliminar:")
-    animales = catalogo.listar_animales()
-    for animal in animales:
-        print(animal)
+catalogo.eliminar_producto(8)
+productos = catalogo.listar_productos()
+for producto in productos:
+    print(producto)
