@@ -1,5 +1,21 @@
+## install flask
+import mysql.connector.errorcode
+from flask import Flask, request, jsonify, render_template, redirect, url_for
+## install flask cors
+from flask_cors import CORS
+## Werkzeug
+from werkzeug.utils import secure_filename
+####
+import os
+import time
+#### sql connector
 import mysql.connector
 print("MySQL Connector Python is installed and imported successfully.")
+###
+app = Flask(__name__)
+CORS(app)
+
+app.config['UPLOAD_FOLDER'] = 'static/imagenes'
 
 class Inventario:
     def __init__(self, host, user, password, database):
@@ -7,40 +23,46 @@ class Inventario:
             host=host,
             user=user,
             password=password,
-            database=database
+            ##database=database
         )
         self.cursor = self.conn.cursor(dictionary=True)
-        self.cursor.execute('''
-            CREATE TABLE IF NOT EXISTS libros (  
-                isbn INT AUTO_INCREMENT PRIMARY KEY,
-                title VARCHAR(255) NOT NULL,
-                quantity INT NOT NULL,
-                price DECIMAL(10, 2) NOT NULL,
-                image VARCHAR(255) NOT NULL,
-                author VARCHAR(255) NOT NULL,
-                year INT
-            );
-        ''')
+        #
+        try:
+            self.cursor.execute(f"USE {database}")
+        except mysql.connector.Error as err:
+            # Si la base de datos no existe, la creamos
+            if err.errno == mysql.connector.errorcode.ER_BAD_DB_ERROR:
+                self.cursor.execute(f"CREATE DATABASE {database}")
+                self.conn.database = database
+            else:
+                raise err
+
+        self.cursor.execute('''CREATE TABLE IF NOT EXISTS libros (  
+            isbn INT AUTO_INCREMENT PRIMARY KEY,
+            title VARCHAR(255) NOT NULL,
+            quantity INT NOT NULL,
+            price DECIMAL(10, 2) NOT NULL,
+            image VARCHAR(255) NOT NULL,
+            author VARCHAR(255) NOT NULL,
+            year INT)''')
         self.conn.commit()
 
-    def agregar_libro(self, isbn, title, quantity, price, image, author, year):
-        sql = "INSERT INTO libros (isbn, title, quantity, price, image, author, year) VALUES (%s, %s, %s, %s, %s, %s, %s)"
-        valores = (isbn, title, quantity, price, image, author, year)
-        self.cursor.execute(sql, valores)
-        self.conn.commit()
-        return self.cursor.lastrowid
+        ## cerrar cursor inicial y abrir uno nuevo con el parámetro diccionario en true
+        self.cursor.close()
+        self.cursor = self.conn.cursor(dictionary=True)
 
-    def consultar_libro(self, isbn):
+    ### listar libros
+    def listar_libros(self):
+        self.cursor.execute("SELECT * FROM libros")
+        libros = self.cursor.fetchall()
+        return libros
+
+    #### consultar libro
+    def consultar_libro(self, isbn):  ## buscamos por isbn
         self.cursor.execute(f"SELECT * FROM libros WHERE isbn = {isbn}")
         return self.cursor.fetchone()
 
-    def modificar_libro(self, isbn, new_title, new_quantity, new_price, new_image, new_author, new_year):
-        sql = "UPDATE libros SET title = %s, quantity = %s, price = %s, image = %s, author = %s, year = %s WHERE isbn = %s"
-        valores = (new_title, new_quantity, new_price, new_image, new_author, new_year, isbn)
-        self.cursor.execute(sql, valores)
-        self.conn.commit()
-        return self.cursor.rowcount > 0
-
+    ## mostrar por print a cada parámetro
     def mostrar_libro(self, isbn):
         libro = self.consultar_libro(isbn)
         if libro:
@@ -56,45 +78,123 @@ class Inventario:
         else:
             print("Producto no encontrado")
 
-    def listar_libro(self):
-        self.cursor.execute("SELECT * FROM libros")
-        libros = self.cursor.fetchall()
-        return libros
+    ### agregar libro
+    def agregar_libro(self, title, quantity, price, image, author, year):
+        sql = "INSERT INTO libros (title, quantity, price, image, author, year) VALUES (%s, %s, %s, %s, %s, %s)"
+        valores = (title, quantity, price, image, author, year)
 
+        self.cursor.execute(sql, valores)
+        self.conn.commit()
+        return self.cursor.lastrowid
+
+    def modificar_libro(self, isbn, new_title, new_quantity, new_price, new_image, new_author, new_year):
+        sql = "UPDATE libros SET title = %s, quantity = %s, price = %s, image = %s, author = %s, year = %s WHERE isbn = %s"
+        valores = (new_title, new_quantity, new_price, new_image, new_author, new_year, isbn)
+
+        self.cursor.execute(sql, valores)
+        self.conn.commit()
+        return self.cursor.rowcount > 0
+
+    # eliminar libro
     def eliminar_libro(self, isbn):
         self.cursor.execute(f"DELETE FROM libros WHERE isbn = {isbn}")
         self.conn.commit()
         return self.cursor.rowcount > 0
 
-inventario = Inventario(host='localhost', user='root', password='', database='veterinarnia')
+# --------------------------------------------------------------------
+# Cuerpo del programa
+# --------------------------------------------------------------------
+# Crear una instancia de la clase Inventario
+inventario = Inventario(host='localhost', user='root', password='', database='inventario')
+ruta_destino = "./static/imagenes/"
 
-# Agregamos productos a la tabla
-inventario.agregar_libro(1, 'la biblia', 10, 4500, 'biblia.jpg', 'unknow', 33)
-inventario.agregar_libro(2, 'la casa del rio', 10, 4500, 'casa.jpg', 'pastor', 2000)
-inventario.agregar_libro(3, 'platero y yo', 10, 2345, 'platero.jpg', 'burro', 1970)
-inventario.agregar_libro(4, 'el codigo limpio', 10, 8500, 'codigo.jpg', 'christian', 2000)
-inventario.agregar_libro(5, '1984', 5, 2500, '1984.jpg', 'geoge orwel', 1984)
-inventario.agregar_libro(6, 'simulacion y simulacro', 15, 52500, 'simulacion.jpg', 'wachovski', 103)
+@app.route("/")
+def index():
+    return render_template('index.html')
 
-# Consultamos un producto y lo mostramos
-codigo_libro = int(input("Ingrese el ISBN del libro: "))
-libro = inventario.consultar_libro(codigo_libro)
-if libro:
-    print(f"Libro encontrado: {libro['isbn']} - {libro['title']}")
-else:
-    print(f'Libro {codigo_libro} no encontrado.')
+@app.route("/libros", methods=["GET"])
+def listar_libros():
+    libros = inventario.listar_libros()
+    return jsonify(libros)
 
-# Modificar un libro
-inventario.mostrar_libro(1)
-inventario.modificar_libro(1, 'la biblia', 10, 4500, 'biblia.jpg', 'unknow', 0)
-inventario.mostrar_libro(1)
+@app.route("/libros/<int:isbn>", methods=["GET"])
+def mostrar_libro(isbn):
+    libro = inventario.consultar_libro(isbn)
+    if libro:
+        return jsonify(libro)
+    else:
+        return "Libro no encontrado", 404
 
-# Listar libros
-libros = inventario.listar_libro()
-for libro in libros:
-    print(libro)
+@app.route('/libros', methods=["POST"])
+def agregar_libro():
+    ### trae datos del form title, quantity, price, image, author, year
+    title = request.form["title"]
+    quantity = request.form["quantity"]
+    price = request.form["price"]
+    author = request.form["author"]
+    year = request.form["year"]
+    
+    image = request.files["image"] if "image" in request.files else None
+    img_name = ""
 
-inventario.eliminar_libro(2)
-libros = inventario.listar_libro()
-for libro in libros:
-    print(libro)
+    if image:
+        ### secure name para la img
+        img_name = secure_filename(image.filename)
+        nombre_base, extension = os.path.splitext(img_name)
+        img_name = f"{nombre_base}_{int(time.time())}{extension}"
+
+    new_isbn = inventario.agregar_libro(title, quantity, price, img_name, author, year)
+    
+    if new_isbn:
+        if image:
+            image.save(os.path.join(ruta_destino, img_name))
+        return jsonify({"mensaje": "Libro agregado correctamente.", "isbn": new_isbn, "imagen": img_name}), 201
+    else:
+        return jsonify({"mensaje": "Error al agregar el producto."}), 500
+
+@app.route('/libros/<int:isbn>', methods=["PUT"])
+def modificar_libro(isbn):
+    new_title = request.form.get("title")
+    new_quantity = request.form.get("quantity")
+    new_price = request.form.get("price")
+    new_author = request.form.get("author")
+    new_year = request.form.get("year")
+    new_image = None
+
+    ## verificar imagen
+    if 'image' in request.files:
+        image = request.files['image']
+        # cambia imagen
+        nombre_imagen = secure_filename(image.filename)
+        nombre_base, extension = os.path.splitext(nombre_imagen)
+        nombre_imagen = f"{nombre_base}_{int(time.time())}{extension}"
+        # guarda imagen
+        image.save(os.path.join(ruta_destino, nombre_imagen))
+        new_image = nombre_imagen
+    else:
+        new_image = inventario.consultar_libro(isbn)['image']  # Conservar la imagen anterior si no se sube una nueva
+
+    ## se llama al método para modificar
+    if inventario.modificar_libro(isbn, new_title, new_quantity, new_price, new_image, new_author, new_year):
+        return jsonify({"mensaje": "Libro modificado"}), 200
+    else:
+        return jsonify({"mensaje": "Libro no encontrado"}), 404
+
+@app.route('/libros/<int:isbn>', methods=["DELETE"])
+def eliminar_libro(isbn):
+    libro = inventario.consultar_libro(isbn)
+    if libro:
+        # eliminar la ruta si existe
+        ruta_imagen = os.path.join(ruta_destino, libro["image"])
+        if os.path.exists(ruta_imagen):
+            os.remove(ruta_imagen)
+        # elimina del catálogo
+        if inventario.eliminar_libro(isbn):
+            return jsonify({"mensaje": "Libro eliminado"}), 200
+        else:
+            return jsonify({"mensaje": "Error al eliminar libro"}), 500
+    else:
+        return jsonify({"mensaje": "Libro no encontrado"}), 404
+
+if __name__ == "__main__":
+    app.run(debug=True)
